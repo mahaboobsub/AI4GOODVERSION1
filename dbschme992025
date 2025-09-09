@@ -1,0 +1,210 @@
+-- ====================================================================
+-- FINAL BLOODBRIDGE AI SCHEMA
+-- This script includes all necessary tables, functions, indexes, and security policies.
+-- ====================================================================
+
+-- Create users table
+CREATE TABLE public.users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    phone VARCHAR(20) NOT NULL UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    password VARCHAR(255),
+    blood_group VARCHAR(5) CHECK (blood_group IN ('A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'Unknown')),
+    city VARCHAR(100),
+    pincode VARCHAR(10),
+    user_type VARCHAR(50) NOT NULL CHECK (user_type IN ('donor', 'patient', 'admin')),
+    role VARCHAR(50) DEFAULT 'Emergency Donor',
+    registration_status VARCHAR(50) DEFAULT 'completed' CHECK (registration_status IN ('pending', 'completed')),
+    availability_status VARCHAR(50) DEFAULT 'available' CHECK (availability_status IN ('available', 'unavailable', 'on_hold')),
+    dnd_status BOOLEAN DEFAULT false,
+    snooze_until TIMESTAMPTZ,
+    cooldown_until TIMESTAMPTZ,
+    last_donation DATE,
+    donations_till_date INTEGER DEFAULT 0,
+    gamification_points INTEGER DEFAULT 0,
+    streak_count INTEGER DEFAULT 0,
+    last_ml_score REAL,
+    score_cached_at TIMESTAMPTZ,
+    last_request_short_code VARCHAR(4),
+    latitude REAL,
+    longitude REAL,
+    notifications_received INTEGER DEFAULT 0,
+    donations_confirmed INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create patients table
+CREATE TABLE public.patients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    phone VARCHAR(20) NOT NULL UNIQUE,
+    blood_group VARCHAR(5) NOT NULL CHECK (blood_group IN ('A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-', 'N/A')),
+    city VARCHAR(100) NOT NULL,
+    pincode VARCHAR(10),
+    condition TEXT,
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'pending_opt_in', 'pending_details', 'pending_verification', 'bridged', 'active')),
+    last_transfusion_date DATE,
+    frequency_in_days INTEGER,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL
+);
+
+-- Create emergency_requests table
+CREATE TABLE public.emergency_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_name VARCHAR(255) NOT NULL,
+    blood_group VARCHAR(5) NOT NULL CHECK (blood_group IN ('A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-')),
+    units_needed INTEGER NOT NULL DEFAULT 1,
+    hospital_name VARCHAR(255),
+    city VARCHAR(100) NOT NULL,
+    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'fulfilled', 'closed', 'escalated')),
+    requested_by_phone VARCHAR(20) NOT NULL,
+    short_code VARCHAR(4) UNIQUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    fulfilled_at TIMESTAMPTZ,
+    request_type VARCHAR(50) DEFAULT 'standard' CHECK (request_type IN ('standard', 'bridge')),
+    latitude REAL,
+    longitude REAL,
+    patient_id UUID REFERENCES public.patients(id) ON DELETE SET NULL,
+    bridge_id UUID -- Constraint added later
+);
+
+-- Create blood_bridges table
+CREATE TABLE public.blood_bridges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID REFERENCES patients(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    blood_group VARCHAR(5) NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    rotation_position INTEGER DEFAULT 1,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    active_request_id UUID REFERENCES emergency_requests(id) ON DELETE SET NULL
+);
+
+-- Add the foreign key from emergency_requests to blood_bridges now
+ALTER TABLE public.emergency_requests
+ADD CONSTRAINT fk_bridge_id FOREIGN KEY (bridge_id) REFERENCES public.blood_bridges(id) ON DELETE SET NULL;
+
+-- Create bridge_members table
+CREATE TABLE public.bridge_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    bridge_id UUID REFERENCES blood_bridges(id) ON DELETE CASCADE,
+    donor_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'skipped')),
+    joined_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(bridge_id, donor_id)
+);
+
+-- Create donor_responses table
+CREATE TABLE public.donor_responses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    donor_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    request_id UUID REFERENCES emergency_requests(id) ON DELETE CASCADE,
+    response VARCHAR(50) NOT NULL CHECK (response IN ('pending', 'accepted', 'declined')),
+    otp VARCHAR(6),
+    otp_expires_at TIMESTAMPTZ,
+    confirmed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(donor_id, request_id)
+);
+
+-- Create other necessary tables
+CREATE TABLE public.inbox_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_phone VARCHAR(20) NOT NULL,
+    user_message TEXT NOT NULL,
+    reason VARCHAR(255) NOT NULL,
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'resolved')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+);
+
+CREATE TABLE public.processed_messages (
+    message_id VARCHAR(255) PRIMARY KEY,
+    processed_at TIMESTAMPTZ DEFAULT NOW(),
+    payload JSONB
+);
+
+CREATE TABLE public.achievements (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    badge_type VARCHAR(255) NOT NULL,
+    points_awarded INTEGER DEFAULT 0,
+    earned_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE public.conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    user_phone VARCHAR(20),
+    message TEXT NOT NULL,
+    response TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create knowledge_base table for RAG
+CREATE TABLE public.knowledge_base (
+    id SERIAL PRIMARY KEY,
+    content TEXT NOT NULL,
+    category VARCHAR(255),
+    embedding JSONB
+);
+
+-- ====================================================================
+-- REQUIRED FUNCTION for "Create Bridge" feature
+-- Your application backend will fail without this.
+-- ====================================================================
+CREATE OR REPLACE FUNCTION find_donors_for_bridge(
+    p_city VARCHAR,
+    p_blood_group VARCHAR,
+    p_pincode VARCHAR,
+    p_limit INTEGER
+)
+RETURNS TABLE (donor_id UUID, final_score REAL) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        u.id AS donor_id,
+        COALESCE(u.last_ml_score, 0.0) AS final_score
+    FROM users u
+    WHERE
+        u.user_type = 'donor'
+        AND u.city ILIKE p_city
+        AND u.blood_group = p_blood_group
+        AND u.availability_status = 'available'
+        AND u.dnd_status = false
+        AND (u.snooze_until IS NULL OR u.snooze_until < NOW())
+        AND u.registration_status = 'completed'
+        AND u.id NOT IN (
+            SELECT bm.donor_id
+            FROM bridge_members bm
+        )
+    ORDER BY
+        COALESCE(u.last_ml_score, 0.0) DESC,
+        u.created_at ASC
+    LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ====================================================================
+-- PERFORMANCE INDEXES
+-- ====================================================================
+CREATE INDEX idx_users_phone ON users(phone);
+CREATE INDEX idx_users_blood_group_city ON users(blood_group, city);
+CREATE INDEX idx_emergency_requests_short_code ON emergency_requests(short_code);
+CREATE INDEX idx_conversations_user_phone ON conversations(user_phone);
+
+-- ====================================================================
+-- POPULATE KNOWLEDGE BASE (Required for FAQ feature)
+-- ====================================================================
+INSERT INTO public.knowledge_base (content, category) VALUES
+('Q: How often can I donate blood? A: You can donate whole blood every 90 days. This waiting period helps your body replenish its iron stores and red blood cells, ensuring you stay healthy.', 'Donation Process'),
+('Q: What are the eligibility requirements to donate? A: To donate blood, you must be healthy, at least 18 years old, and weigh a minimum of 50 kg. You should not have any infectious diseases.', 'Eligibility'),
+('Q: What is a Blood Bridge? A: A Blood Bridge is a dedicated group of volunteer donors committed to supporting a specific patient who requires regular blood transfusions, like those with Thalassemia.', 'Platform Features'),
+('Q: Is it safe to donate blood? A: Yes, donating blood is very safe. All needles and equipment are sterile and used only once. The process is conducted by trained medical professionals.', 'Safety');
+
+-- Final confirmation message
+SELECT 'Final schema and functions created successfully.' as status;

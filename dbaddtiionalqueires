@@ -1,0 +1,126 @@
+-- ====================================================================
+-- BLOODBRIDGE AI: COMPREHENSIVE DEMO DATA SCRIPT
+-- Populates the database with ~15 users and related activity.
+-- ====================================================================
+
+-- OPTIONAL: Uncomment the following lines to clear existing demo data before inserting new data.
+-- WARNING: This will delete data. Make sure you want to do this.
+/*
+DELETE FROM public.donor_responses;
+DELETE FROM public.bridge_members;
+DELETE FROM public.blood_bridges;
+DELETE FROM public.emergency_requests;
+DELETE FROM public.patients;
+DELETE FROM public.users WHERE phone LIKE '+91999%'; -- Deletes only the users from this script
+*/
+
+
+-- ====================================================================
+-- 1. INSERT USERS (Donors, Patients, and Admin)
+-- ====================================================================
+INSERT INTO public.users (phone, name, password, blood_group, city, user_type, role, gamification_points, donations_confirmed, streak_count)
+VALUES
+    -- Admin User (already exists from previous script, but safe to include)
+    ('+918000000000', 'Admin User', 'admin123', 'O+', 'Central', 'admin', 'Admin', 0, 0, 0),
+
+    -- High-Activity Donors
+    ('+919990000001', 'Ravi Kumar', 'password123', 'O+', 'Mumbai', 'donor', 'Donor', 1250, 12, 4),
+    ('+919990000002', 'Sneha Reddy', 'password123', 'A+', 'Hyderabad', 'donor', 'Donor', 950, 9, 2),
+    ('+919990000003', 'Amit Patel', 'password123', 'B+', 'Ahmedabad', 'donor', 'Donor', 800, 7, 1),
+    
+    -- Mid-Activity Donors
+    ('+919990000004', 'Priya Singh', 'password123', 'AB+', 'Delhi', 'donor', 'Donor', 450, 4, 1),
+    ('+919990000005', 'Vikram Rathore', 'password123', 'O-', 'Jaipur', 'donor', 'Donor', 300, 3, 0),
+    ('+919990000006', 'Anjali Sharma', 'password123', 'B-', 'Pune', 'donor', 'Donor', 250, 2, 0),
+
+    -- New Donors
+    ('+919990000007', 'Karan Mehta', 'password123', 'A-', 'Kolkata', 'donor', 'Donor', 50, 0, 0),
+    ('+919990000008', 'Fatima Khan', 'password123', 'AB-', 'Lucknow', 'donor', 'Donor', 50, 0, 0),
+
+    -- Patient Users
+    ('+919990000009', 'Rohan Kumar', 'password123', 'B+', 'Delhi', 'patient', 'Patient', 0, 0, 0),
+    ('+919990000010', 'Aisha Verma', 'password123', 'A+', 'Mumbai', 'patient', 'Patient', 0, 0, 0),
+    ('+919990000011', 'Arjun Singh', 'password123', 'O+', 'Chandigarh', 'patient', 'Patient', 0, 0, 0)
+ON CONFLICT (phone) DO NOTHING;
+
+
+-- ====================================================================
+-- 2. INSERT PATIENT PROFILES
+-- ====================================================================
+INSERT INTO public.patients (phone, name, blood_group, city, condition, status, last_transfusion_date, frequency_in_days, user_id)
+VALUES
+    -- Bridged Patient (Rohan Kumar)
+    ('+919990000009', 'Rohan Kumar', 'B+', 'Delhi', 'Beta Thalassemia Major', 'bridged', NOW() - INTERVAL '15 days', 20, (SELECT id FROM users WHERE phone = '+919990000009')),
+    -- Bridged Patient (Aisha Verma)
+    ('+919990000010', 'Aisha Verma', 'A+', 'Mumbai', 'Beta Thalassemia Major', 'bridged', NOW() - INTERVAL '5 days', 18, (SELECT id FROM users WHERE phone = '+919990000010')),
+    -- Patient Pending Verification (Arjun Singh)
+    ('+919990000011', 'Arjun Singh', 'O+', 'Chandigarh', 'Thalassemia Intermedia', 'pending_verification', NULL, NULL, (SELECT id FROM users WHERE phone = '+919990000011')),
+    -- Patient with no user account yet
+    ('+919990000012', 'Meera Iyer', 'AB+', 'Chennai', 'Beta Thalassemia Major', 'pending_verification', NULL, NULL, NULL)
+ON CONFLICT (phone) DO NOTHING;
+
+
+-- ====================================================================
+-- 3. CREATE BLOOD BRIDGES AND ADD MEMBERS
+-- ====================================================================
+DO $$
+DECLARE
+    rohan_patient_id UUID;
+    aisha_patient_id UUID;
+    rohan_bridge_id UUID;
+    aisha_bridge_id UUID;
+BEGIN
+    -- Get patient IDs
+    SELECT id INTO rohan_patient_id FROM public.patients WHERE phone = '+919990000009';
+    SELECT id INTO aisha_patient_id FROM public.patients WHERE phone = '+919990000010';
+
+    -- Create bridges if patients exist
+    IF rohan_patient_id IS NOT NULL THEN
+        INSERT INTO public.blood_bridges (patient_id, name, blood_group, city)
+        VALUES (rohan_patient_id, 'Rohan''s Life Savers', 'B+', 'Delhi')
+        RETURNING id INTO rohan_bridge_id;
+
+        -- Add members to Rohan's bridge
+        INSERT INTO public.bridge_members (bridge_id, donor_id, position)
+        VALUES
+            (rohan_bridge_id, (SELECT id FROM users WHERE phone = '+919990000003'), 1), -- Amit (B+)
+            (rohan_bridge_id, (SELECT id FROM users WHERE phone = '+919990000006'), 2)  -- Anjali (B-)
+        ON CONFLICT DO NOTHING;
+    END IF;
+
+    IF aisha_patient_id IS NOT NULL THEN
+        INSERT INTO public.blood_bridges (patient_id, name, blood_group, city)
+        VALUES (aisha_patient_id, 'Aisha''s Hope Crew', 'A+', 'Mumbai')
+        RETURNING id INTO aisha_bridge_id;
+
+        -- Add members to Aisha's bridge
+        INSERT INTO public.bridge_members (bridge_id, donor_id, position)
+        VALUES
+            (aisha_bridge_id, (SELECT id FROM users WHERE phone = '+919990000002'), 1), -- Sneha (A+)
+            (aisha_bridge_id, (SELECT id FROM users WHERE phone = '+919990000007'), 2)  -- Karan (A-)
+        ON CONFLICT DO NOTHING;
+    END IF;
+END $$;
+
+
+-- ====================================================================
+-- 4. INSERT ACTIVE EMERGENCY REQUESTS
+-- ====================================================================
+INSERT INTO public.emergency_requests (patient_name, blood_group, hospital_name, city, requested_by_phone, short_code)
+VALUES
+    ('Anonymous Patient', 'O-', 'Apollo Hospital', 'Delhi', '+919876543210', '1234'),
+    ('Accident Victim', 'A-', 'Fortis Hospital', 'Mumbai', '+918765432109', '5678')
+ON CONFLICT (short_code) DO NOTHING;
+
+
+-- ====================================================================
+-- 5. INSERT INBOX MESSAGES
+-- ====================================================================
+INSERT INTO public.inbox_messages (user_phone, user_message, reason, status)
+VALUES
+    ('+919990000002', 'I had a slight rash after my last donation, is that normal?', 'Sensitive Keyword Detected', 'pending'),
+    ('+919990000010', 'I need to reschedule my next transfusion from the 25th to the 27th, is that possible?', 'Patient Inquiry', 'pending')
+ON CONFLICT DO NOTHING;
+
+-- Final confirmation message
+SELECT 'Comprehensive demo data script completed successfully.' as status;

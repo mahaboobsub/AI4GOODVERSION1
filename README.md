@@ -1,169 +1,163 @@
-🩸 BloodBridge AI
+Of course. A great README is essential for any project, especially for a hackathon. It tells the story of your project, explains its purpose, and makes it easy for judges and other developers to understand and run your work.
 
-**BloodBridge AI** is an AI-powered, gamified platform that connects blood donors with patients in real-time through a conversational WhatsApp interface.  
-Our mission is to eliminate the desperate, time-consuming search for blood — especially for patients with chronic conditions like **Thalassemia**, who require regular transfusions.  
+Here is a comprehensive README.md file that covers everything you have built so far.
 
-⚡ **Project Status**: Feature-complete MVP (all core chatbot, services, and dashboard logic fully implemented & functional).  
+Action: Create Your README.md File
 
----
+In the root directory of your entire project (the blood-bridge-project folder that contains both frontend and backend), create a new file named README.md.
 
-## ✨ Core Features
+Copy the entire content below and paste it into that new file.
 
-- 🤖 **AI-Powered Chatbot**  
-  WhatsApp bot powered by **Google Gemini**, handling registration, emergency requests & FAQs with natural conversation flow.  
+code
+Markdown
+download
+content_copy
+expand_less
 
-- 🌉 **Blood Bridges**  
-  Rotating donor groups tailored for patients with recurring transfusion needs.  
+# BloodBridge AI: An AI-Powered Platform for Thalassemia Care
 
-- 🧠 **Predictive Donor Matching**  
-  Python ML microservice scores donors based on **availability & reliability** to ensure the best matches.  
+## 🏆 Mission: Towards a Thalassemia-Free India by 2030
 
-- 🏆 **Gamification & Engagement**  
-  Points & badges to build a **motivated donor community**.  
+**BloodBridge AI** is a comprehensive, multi-platform solution designed to tackle the critical challenge of providing consistent, life-saving blood transfusions for Thalassemia patients in India. By leveraging AI, real-time communication, and a gamified user experience, we aim to bridge the gap between compassionate donors and patients in constant need.
 
-- 💻 **Admin Dashboard**  
-  React-based dashboard for admins to **monitor activity, manage users, and trigger real-time actions**.  
+Our platform addresses the entire lifecycle of thalassemia care, from intelligent donor engagement and emergency response to long-term patient support through the innovative **Blood Bridge** system.
 
 ---
 
-## 🏗️ System Architecture
+## ✨ Key Features
 
-BloodBridge AI is built on a microservices architecture to ensure scalability, modularity, and maintainability. The system integrates multiple components to handle real-time blood donor matching, user engagement, and administrative oversight. Below is a breakdown of the architecture, including data flows and interactions between services.
-Architecture Diagram
-text[ Users (WhatsApp) ] <--> [ WhatsApp API (Meta) ] <--> [ Node.js Backend (Express) ] <--> [ Supabase DB (PostgreSQL) ]
-                                                            |
-                                                            +--> [ Google Gemini API ] (AI Orchestration)
-                                                            |
-                                                            +--> [ Python ML Service (FastAPI) ] (Donor Scoring)
-                                                            |
-[ Admin Users ] <--> [ React Admin Dashboard (Vite) ] <--+ (REST API)
-                                                            |
-                                                            +--> [ Supabase Realtime ] (Live Updat
-🛠️ Tech Stack
-Backend: Node.js, Express.js
+Our system is a fusion of an intelligent chatbot backend and a modern, role-based web application.
 
-Frontend: React (Vite), Material-UI (MUI)
+### 1. AI-Powered WhatsApp Chatbot
+The primary point of contact for users, providing unparalleled accessibility.
+- **🤖 AI-Powered Message Routing:** Uses Google Gemini to understand user intent (donor registration, patient onboarding, emergency) and routes them to the correct workflow.
+- **🩸 Emergency Blood Request System:** A smart, automated system that identifies and sequentially notifies the best-matched donors during emergencies.
+- **❤️ Blood Bridge Coordination:** An innovative system that creates dedicated, rotational donor pools for specific Thalassemia patients, ensuring a reliable and predictable blood supply.
+- **📈 Predictive Donor Engagement:** Proactively re-engages inactive donors and reminds eligible donors when their cooldown period is over, drastically reducing donor fatigue and churn.
+- **❓ Automated FAQ Handling:** A RAG (Retrieval-Augmented Generation) system answers common questions and escalates sensitive medical queries to human volunteers.
 
-ML Service: Python, FastAPI, Sentence Transformers, PyTorch
+### 2. Blood Management Web Portal
+A comprehensive web application with dedicated portals for all stakeholders.
+- **👑 Admin Dashboard:** A powerful mission control center for NGOs and hospitals. Admins can view real-time analytics, manage all users, create and manage Blood Bridges, oversee active emergencies, and handle escalated communications.
+- **💖 Donor Portal:** An engaging dashboard designed to retain donors. Donors can track their impact (lives saved, points earned), view their donation history, manage their availability, and see their rank on a community leaderboard.
+- **💚 Patient Portal:** A supportive space for patients to view their health timeline, see their connected Blood Bridge donors, and manage their transfusion schedules.
+- **🕹️ Donor Gamification System:** A system of badges, leaderboards, and milestones to recognize and reward frequent donors, fostering a sense of community and friendly competition.
 
-Database: PostgreSQL (Supabase managed)
+---
 
-AI Orchestration: Google Gemini API
+## 🚀 Getting Started
 
-Realtime: Supabase Realtime
+To run the complete BloodBridge AI platform locally, you will need to run three separate services: the **Backend (Node.js)**, the **Frontend (React)**, and the **ML Service (Python)**.
 
-🚀 Getting Started
-✅ Prerequisites
-Node.js v18+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v16 or newer)
+- [Python](https://www.python.org/) (v3.8 or newer)
+- [npm](https://www.npmjs.com/)
+- A Supabase account with a PostgreSQL database.
 
-Python v3.9+
+### 1. Backend Setup (The Brain)
 
-Git installed
+The Node.js server handles the main application logic, API, and WhatsApp bot integration.
 
-Supabase Account
-
-Meta for Developers Account (for WhatsApp Business API)
-
-1️⃣ Clone the Repository
-bash
-Copy code
-git clone <your-repository-url>
-cd <your-repository-folder>
-2️⃣ Set Up the Database (Supabase)
-Create a new Supabase project.
-
-Go to Database → Connection Pooling and copy the connection string (postgresql://...).
-
-In SQL Editor, click New query and run the contents of db.txt to create tables & functions.
-
-3️⃣ Configure Environment Variables
-📌 Backend (backend/.env)
-ini
-Copy code
-PORT=3001
-JWT_SECRET="generate-a-strong-random-secret-key"
-DATABASE_URL="YOUR_SUPABASE_CONNECTION_POOLER_URI"
-GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
-ML_SERVICE_URL="http://localhost:8000"
-WHATSAPP_TOKEN="YOUR_WHATSAPP_TEMPORARY_ACCESS_TOKEN"
-WHATSAPP_PHONE_NUMBER_ID="YOUR_WHATSAPP_PHONE_NUMBER_ID"
-WHATSAPP_APP_SECRET="YOUR_WHATSAPP_APP_SECRET"
-WHATSAPP_VERIFY_TOKEN="create-a-custom-verify-token"
-ADMIN_DEMO_PHONE="+91..."
-📌 ML Service (ml_services/.env)
-ini
-Copy code
-DATABASE_URL="YOUR_SUPABASE_CONNECTION_POOLER_URI"
-📌 Admin Dashboard (admin-dashboard/.env)
-ini
-Copy code
-VITE_SUPABASE_URL="YOUR_PUBLIC_SUPABASE_PROJECT_URL"
-VITE_SUPABASE_ANON_KEY="YOUR_PUBLIC_SUPABASE_ANON_KEY"
-4️⃣ Install Dependencies
-Backend
-bash
-Copy code
+```bash
+# 1. Navigate to the backend directory
 cd backend
+
+# 2. Install dependencies
 npm install
-ML Service
-bash
-Copy code
-cd ml_services
-python -m venv venv
-# Activate venv:
-# Windows: venv\Scripts\activate
-# Mac/Linux: source venv/bin/activate
-pip install -r requirements.txt
-Frontend
-bash
-Copy code
-cd admin-dashboard
-npm install
-5️⃣ Run the Application
-Start Backend
-bash
-Copy code
-cd backend
-npm start
-# ✅ BloodBridge AI backend is running on port 3001
-Start ML Service
-bash
-Copy code
-cd ml_services
-uvicorn main:app --reload
-# INFO: Uvicorn running on http://127.0.0.1:8000
-Start Frontend
-bash
-Copy code
-cd admin-dashboard
+
+# 3. Set up environment variables
+#    - Copy the contents of .env.example (if provided) or a previous .env file
+#    - Create a new file named .env
+#    - Fill in your DATABASE_URL, JWT_SECRET, and WhatsApp/Meta credentials.
+
+# 4. Run the development server
 npm run dev
-# Local server: http://localhost:5173
-6️⃣ Access the Application
-Open browser → http://localhost:5173
 
-Log in with:
+Your backend will now be running, typically on http://localhost:3001.
 
-Phone: ADMIN_DEMO_PHONE from backend .env
+2. ML Service Setup (The AI Engine)
 
-Password: admin123
+The Python service handles donor scoring and the RAG-based FAQ system.
 
-🎉 Next Steps
-📱 Test WhatsApp Bot: Send messages to your WhatsApp Business number.
+code
+Bash
+download
+content_copy
+expand_less
+IGNORE_WHEN_COPYING_START
+IGNORE_WHEN_COPYING_END
+# 1. Navigate to the ml_services directory
+cd ml_services
 
-📊 Explore Admin Dashboard: Monitor live activity & manage users.
+# 2. (Recommended) Create and activate a Python virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-🤝 Contribute: Check out our contributing guidelines.
+# 3. Install Python dependencies
+pip install -r requirements.txt
 
-📚 Resources
-Supabase Docs
+# 4. Set up environment variables
+#    - Create a .env file and add your DATABASE_URL (same as the backend).
 
-Meta WhatsApp API
+# 5. Run the FastAPI server
+uvicorn main:app --reload
 
-Google Gemini API
+Your ML service will now be running, typically on http://localhost:8000.
 
-💬 Contact
-📧 support@bloodbridge.ai
-❤️ Let’s save lives together!
+3. Frontend Setup (The Face)
 
-pgsql
-Copy code
+The React application provides the user interface for all portals.
+
+code
+Bash
+download
+content_copy
+expand_less
+IGNORE_WHEN_COPYING_START
+IGNORE_WHEN_COPYING_END
+# 1. Navigate to the frontend directory
+cd frontend
+
+# 2. Install dependencies
+npm install
+
+# 3. Verify environment variables
+#    - The .env file should contain REACT_APP_BACKEND_URL=http://localhost:3001
+#    - This tells the frontend to talk to your local Node.js backend.
+
+# 4. Run the development server
+npm start```
+Your browser will automatically open to `http://localhost:3000`.
+
+### 4. Database Setup (The Memory)
+
+Your backend requires a PostgreSQL database.
+1.  Create a project on [Supabase](https://supabase.com/).
+2.  In the **SQL Editor**, run the complete schema script provided in `db.txt` to create all necessary tables, functions, and indexes.
+3.  Run the provided "demo data" SQL script to populate your database with users and activity for a rich demo experience.
+4.  Copy your database **Connection Pooler URI** into the `DATABASE_URL` variable in your backend's `.env` file.
+
+---
+
+## 🛠️ Tech Stack
+
+-   **Backend:** Node.js, Express.js
+-   **Frontend:** React, Tailwind CSS, ShadCN/UI Components
+-   **Database:** PostgreSQL (managed by Supabase)
+-   **AI / ML:** Python, FastAPI, Google Gemini, Sentence-Transformers
+-   **Real-time Communication:** Meta's WhatsApp API
+
+---
+
+##  Demo Credentials
+
+You can use the following credentials to explore the different portals:
+
+| Role    | Phone Number      | Password        |
+|---------|-------------------|-----------------|
+| **Admin** | `+918000000000`   | `admin123`      |
+| **Donor** | `+919876543210`   | `mumbai o+`     |
+| **Patient** | `+911234567890` | `delhi a+`      |
+
+*(Note: Donor and Patient passwords are their `city` and `blood_group` in lowercase, separated by a space.)*
