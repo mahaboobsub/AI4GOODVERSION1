@@ -1,7 +1,7 @@
 <img width="1689" height="789" alt="image" src="https://github.com/user-attachments/assets/16fde01b-ff19-44d9-83bb-3ea9b78f59a9" />
 <img width="1649" height="777" alt="image" src="https://github.com/user-attachments/assets/0f260d55-47f7-43c9-b9b9-f2861dbc9685" />
-
 <img width="760" height="800" alt="image" src="https://github.com/user-attachments/assets/3352b2e9-1aee-4f37-9efc-2b554e070677" />
+
 # BloodBridge AI: An AI-Powered Platform for Thalassemia Care
 
 ## 🏆 Mission: Towards a Thalassemia-Free India by 2030
