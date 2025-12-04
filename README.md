@@ -1,19 +1,3 @@
-Of course. A great README is essential for any project, especially for a hackathon. It tells the story of your project, explains its purpose, and makes it easy for judges and other developers to understand and run your work.
-
-Here is a comprehensive README.md file that covers everything you have built so far.
-
-Action: Create Your README.md File
-
-In the root directory of your entire project (the blood-bridge-project folder that contains both frontend and backend), create a new file named README.md.
-
-Copy the entire content below and paste it into that new file.
-
-code
-Markdown
-download
-content_copy
-expand_less
-
 # BloodBridge AI: An AI-Powered Platform for Thalassemia Care
 
 ## 🏆 Mission: Towards a Thalassemia-Free India by 2030
