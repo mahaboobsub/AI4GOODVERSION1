@@ -22,7 +22,7 @@
 **Backend (API Layer)**
 - **Runtime:** Node.js
 - **Framework:** Express.js
-- **Scheduling:** Node-cron (Predictive Engagement)
+- **Scheduling & Services:** Node-cron (Predictive Engagement via `EngagementService` and `BridgeCoordinationService`)
 - **Authentication:** JSON Web Tokens (JWT)
 - **WhatsApp Integration:** Meta Webhooks API
 
@@ -106,7 +106,7 @@ Supabase was chosen specifically because:
 Designed utilizing robust PL/pgSQL architectures within:
 - **`users` & `patients`**: Entities defining system participants alongside gamification stats (`gamification_points`, `streak_count`, `last_ml_score`).
 - **`emergency_requests`**: Location-aware requests mapping needs back to patients.
-- **`blood_bridges` & `bridge_members`**: The heart of the platform forming relational groupings. Tracks the `rotation_position` for continuous donor sequencing.
+- **`blood_bridges` & `bridge_members`**: The heart of the platform forming relational groupings. Tracks the `rotation_position` for continuous donor sequencing managed by the `BridgeCoordinationService`.
 - **`knowledge_base`**: Stores text and their corresponding `<vec>` `embedding` for semantic FAQS.
 - **Custom Functions**: E.g. `find_donors_for_bridge()` scoring heuristics based on ML inputs + constraints.
 
@@ -218,6 +218,9 @@ cd frontend
 npm install
 npm start
 ```
+> [!NOTE]
+> If you encounter a `'craco' is not recognized` error, you can install the CLI globally using `npm install -g @craco/craco` or simply run `npx craco start`.
+
 Browser will launch at `http://localhost:3000`.
 
 ---
