@@ -8,28 +8,156 @@
 
 **BloodBridge AI** is a comprehensive, multi-platform solution designed to tackle the critical challenge of providing consistent, life-saving blood transfusions for Thalassemia patients in India. By leveraging AI, real-time communication, and a gamified user experience, we aim to bridge the gap between compassionate donors and patients in constant need.
 
-Our platform addresses the entire lifecycle of thalassemia care, from intelligent donor engagement and emergency response to long-term patient support through the innovative **Blood Bridge** system.
+---
+
+## 🛠️ Tech Stack
+
+**Frontend**
+- **Framework:** React.js (Create React App + Craco for Webpack override)
+- **Styling:** Tailwind CSS
+- **UI Components:** Shadcn UI (Radix UI primitives)
+- **Forms & Validation:** React Hook Form, Zod
+- **Routing:** React Router DOM
+
+**Backend (API Layer)**
+- **Runtime:** Node.js
+- **Framework:** Express.js
+- **Scheduling:** Node-cron (Predictive Engagement)
+- **Authentication:** JSON Web Tokens (JWT)
+- **WhatsApp Integration:** Meta Webhooks API
+
+**ML & AI Services (Python Layer)**
+- **Framework:** FastAPI, Uvicorn
+- **Machine Learning:** Scikit-learn, PyTorch, Sentence-Transformers
+- **Generative AI:** Google Gemini 2.0 Flash (`@google/generative-ai` package)
+
+**Database Layer**
+- **DBMS:** PostgreSQL
+- **Managed Provider:** Supabase
 
 ---
 
-## ✨ Key Features
+## 🏗️ System Architecture
 
-Our system is a fusion of an intelligent chatbot backend and a modern, role-based web application.
+The project is built around a hybrid microservices architecture with a dedicated ML cluster:
+1. **Frontend (React)**: Handles administrative operations, patient analytics, and donor portals.
+2. **Backend (Node.js API)**: Orchestrates the core business logic, serves REST endpoints, listens continuously to Meta WhatsApp webhooks, and schedules chron jobs.
+3. **ML Service (FastAPI)**: Python-based microservice that calculates donor reliability scores using ML models and performs RAG logic with Sentence-Transformers for answering medical FAQs over vectors.
+4. **Data Persistence**: A scalable PostgreSQL database managing highly relational state maps of users and dynamically evolving rotary "Blood Bridges".
 
-### 1. AI-Powered WhatsApp Chatbot
-The primary point of contact for users, providing unparalleled accessibility.
-- **🤖 AI-Powered Message Routing:** Uses Google Gemini to understand user intent (donor registration, patient onboarding, emergency) and routes them to the correct workflow.
-- **🩸 Emergency Blood Request System:** A smart, automated system that identifies and sequentially notifies the best-matched donors during emergencies.
-- **❤️ Blood Bridge Coordination:** An innovative system that creates dedicated, rotational donor pools for specific Thalassemia patients, ensuring a reliable and predictable blood supply.
-- **📈 Predictive Donor Engagement:** Proactively re-engages inactive donors and reminds eligible donors when their cooldown period is over, drastically reducing donor fatigue and churn.
-- **❓ Automated FAQ Handling:** A RAG (Retrieval-Augmented Generation) system answers common questions and escalates sensitive medical queries to human volunteers.
+---
 
-### 2. Blood Management Web Portal
-A comprehensive web application with dedicated portals for all stakeholders.
-- **👑 Admin Dashboard:** A powerful mission control center for NGOs and hospitals. Admins can view real-time analytics, manage all users, create and manage Blood Bridges, oversee active emergencies, and handle escalated communications.
-- **💖 Donor Portal:** An engaging dashboard designed to retain donors. Donors can track their impact (lives saved, points earned), view their donation history, manage their availability, and see their rank on a community leaderboard.
-- **💚 Patient Portal:** A supportive space for patients to view their health timeline, see their connected Blood Bridge donors, and manage their transfusion schedules.
-- **🕹️ Donor Gamification System:** A system of badges, leaderboards, and milestones to recognize and reward frequent donors, fostering a sense of community and friendly competition.
+## 🔁 Data Flow
+
+1. **User Request (WhatsApp):** A user sends a WhatsApp message.
+2. **Incoming Webhook:** The message hits the Node.js API `POST /webhook` endpoint.
+3. **Intent Detection (AI):** Node.js dispatches the raw text to Gemini 2.0 Flash to deduce intent (e.g., "Need blood", "Willing to donate", "Inquiry").
+4. **RAG / ML Processing:** 
+    - *If Inquiry:* Routes to the Python ML Service for semantic retrieval using vector embeddings against the knowledge base.
+    - *If Blood Need:* Calls the Python ML Service to determine the highest predictive score of available donors.
+5. **Business Logic & DB:** The Node API persists requests, assigns Blood Bridges, and records transactions in the Supabase PostgreSQL database.
+6. **Action Execution:** Back-end schedules automated WhatsApp meta messages (OTPs, notifications) bridging the nearest optimal matches.
+7. **Frontend Syncing:** Live statuses are viewed directly on the Admin/Patient React web application drawing from the DB.
+
+---
+
+## 📂 Component Hierarchy (Frontend)
+
+The frontend organizes features broadly around user roles under the `src/pages` and `src/components` tree:
+- **`App.js`**: Core setup and routing wrapper.
+- **`pages/`**:
+  - `Landing.jsx`: Initial public pitch and routing logic.
+  - `Login.jsx`: Uniform entry point handling multiple roles.
+  - `AdminPortal.jsx`: Dashboard for system managers (NGOs, hospitals) to monitor Blood Bridges.
+  - `DonorPortal.jsx`: Personalized gamified donor interface with impact metrics.
+  - `PatientPortal.jsx`: Tracking platform for patients seeing assigned donors and statuses.
+- **`components/`**: Reusable primitives built via Shadcn (Dialogs, Accords, Dropdowns) ensuring highly standardized design language.
+
+---
+
+## 🤔 Technical Design Decisions
+
+- **Polyglot Microservices:** Keeping the ML prediction layer isolated in Python leverages the maturity of `scikit-learn` and `sentence-transformers`, while Node.js seamlessly manages the highly concurrent IO demands of WhatsApp Webhooks.
+- **Scheduled Engagement (Chron Jobs):** Relying on preemptive node-cron routines avoids cold starts. The system calculates upcoming donation eligibilities overnight and cues Meta API messages without human intervention.
+- **Webhook Raw Body Verification:** Employs raw buffer overrides to safely generate HMAC crypto signatures guaranteeing secure integrations with Meta's systems.
+- **Rotational Mechanism (Blood Bridges):** Moving from random broadcasting to a predictable queue mechanism, guaranteeing that Thalassemia patients have an uninterrupted cycle of targeted donors.
+
+---
+
+## 🗄️ Why Supabase? (Database Decision)
+
+Supabase was chosen specifically because:
+1. **Native PostgreSQL Engine:** The platform is deeply relational (Patients vs. Blood Bridges vs. Donor Allocations vs. Rotations).
+2. **pgvector Integration:** Enables natively querying vector embeddings inside the database (vital for the RAG FAQ functionality) without needing a secondary disparate vector database like Pinecone.
+3. **Simplicity and Security:** Easily integrates with `pg` on Node backend with instant scalability and native authentication features should the project pivot to them over JWT.
+
+---
+
+## 🧠 Why Gemini 2.0 Flash?
+
+1. **Extremely Low Latency:** Required for seamless chatbot conversations where sub-second replies dictate user retention. 2.0 Flash executes conversational paths exceptionally faster.
+2. **High Structured Generation Consistency:** The WhatsApp payload logic depends heavily on returning exact JSON objects containing intent properties (Blood groups, City schemas) that Gemini 2.0 Flash reliably yields out-of-the-box.
+3. **Cost Efficiency at Scale:** When managing thousands of unstructured SMS intents daily, Flash ensures computing costs remain heavily optimized without compromising on reasoning accuracy.
+
+---
+
+## 📊 Database Schema
+
+Designed utilizing robust PL/pgSQL architectures within:
+- **`users` & `patients`**: Entities defining system participants alongside gamification stats (`gamification_points`, `streak_count`, `last_ml_score`).
+- **`emergency_requests`**: Location-aware requests mapping needs back to patients.
+- **`blood_bridges` & `bridge_members`**: The heart of the platform forming relational groupings. Tracks the `rotation_position` for continuous donor sequencing.
+- **`knowledge_base`**: Stores text and their corresponding `<vec>` `embedding` for semantic FAQS.
+- **Custom Functions**: E.g. `find_donors_for_bridge()` scoring heuristics based on ML inputs + constraints.
+
+---
+
+## 🖼️ Template Engine
+
+The stack leverages **JSX (React)** heavily on the frontend to define the DOM. 
+The backend avoids standard HTML/Template engines (like EJS/Pug) because it is fully abstracted as a **headless JSON REST API**. Messaging "templates" are structured purely as configuration payloads interfacing primarily natively with Meta's interactive WhatsApp message structures.
+
+---
+
+## 🤖 AI Integration
+
+- **NLP Router (Gemini):** Transforms raw user messages into strict backend parameters. 
+- **Predictive Scoring:** Machine Learning (Python/Scikit-learn) is engaged continuously to track past behavior patterns and compute a single `last_ml_score`, favoring donors statistically likely to show up.
+- **RAG FAQ (SentenceTransformers):** Uses embedded semantics mapping to find contextual matching questions the user isn't even asking 1-to-1 against the DB's `knowledge_base` table.
+
+---
+
+## 📁 Folder Structure
+
+```text
+/
+├── backend/                  # Node.js + Express API Layer
+│   ├── src/
+│   │   ├── config/           # Envs and Constants
+│   │   ├── controllers/      # Webhook & Core REST Logic
+│   │   ├── middleware/       # Verifications & Guards
+│   │   ├── routes/           # Express Routers
+│   │   ├── services/         # Orchestration & Chron Tasks
+│   │   └── utils/            # Helpers
+│   ├── package.json
+│   └── server.js             # API Entry point
+├── frontend/                 # React UI Application
+│   ├── public/
+│   ├── src/
+│   │   ├── components/       # UI Components + Shadcn
+│   │   ├── context/          # React State contexts
+│   │   ├── hooks/            # Custom Hooks
+│   │   ├── lib/              # Utils and Axios interceptors
+│   │   ├── pages/            # View specific components
+│   │   └── index.js
+│   ├── craco.config.js       # Required for Tailwind
+│   └── package.json
+├── ml_services/              # Python FastAPI + ML Layer
+│   ├── main.py               # Application Entry
+│   └── requirements.txt
+├── dbschme992025             # Supabase raw SQL queries
+└── README.md
+```
 
 ---
 
@@ -38,114 +166,71 @@ A comprehensive web application with dedicated portals for all stakeholders.
 To run the complete BloodBridge AI platform locally, you will need to run three separate services: the **Backend (Node.js)**, the **Frontend (React)**, and the **ML Service (Python)**.
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v16 or newer)
-- [Python](https://www.python.org/) (v3.8 or newer)
-- [npm](https://www.npmjs.com/)
-- A Supabase account with a PostgreSQL database.
+- Node.js (v18+)
+- Python (v3.8+)
+- PostgreSQL / Supabase account 
 
-### 1. Backend Setup (The Brain)
+### 1. Setup Database
+1. Create a project in [Supabase](https://supabase.com).
+2. Execute the entire SQL script found in `dbschme992025` inside the Supabase SQL editor to create the schema and stored procedures.
+3. Retrieve your PostgreSQL connection string.
 
-The Node.js server handles the main application logic, API, and WhatsApp bot integration.
+### 2. Configure Environment Variables
+You'll need configuration across services. 
 
+1. Within `backend/`:
+Create a `.env` file containing the following:
+```env
+PORT=3001
+JWT_SECRET=super_secret_jwt_key
+DATABASE_URL=postgres://[user]:[password]@[host]:[port]/[db]
+GEMINI_API_KEY=your_gemini_key
+ML_SERVICE_URL=http://localhost:8000
+WHATSAPP_TOKEN=your_meta_token
+WHATSAPP_PHONE_NUMBER_ID=your_phone_id
+WHATSAPP_APP_SECRET=your_app_secret
+WHATSAPP_VERIFY_TOKEN=webhook_verify_token
+ADMIN_DEMO_PHONE=+918000000000
+```
+
+2. Within `ml_services/`:
+Create a `.env` file holding the `DATABASE_URL` matching the backend.
+
+### 3. Start Backend Layer
 ```bash
-# 1. Navigate to the backend directory
 cd backend
-
-# 2. Install dependencies
 npm install
-
-# 3. Set up environment variables
-#    - Copy the contents of .env.example (if provided) or a previous .env file
-#    - Create a new file named .env
-#    - Fill in your DATABASE_URL, JWT_SECRET, and WhatsApp/Meta credentials.
-
-# 4. Run the development server
 npm run dev
+```
 
-Your backend will now be running, typically on http://localhost:3001.
-
-2. ML Service Setup (The AI Engine)
-
-The Python service handles donor scoring and the RAG-based FAQ system.
-
-code
-Bash
-download
-content_copy
-expand_less
-IGNORE_WHEN_COPYING_START
-IGNORE_WHEN_COPYING_END
-# 1. Navigate to the ml_services directory
+### 4. Start ML Layer
+```bash
 cd ml_services
-
-# 2. (Recommended) Create and activate a Python virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# 3. Install Python dependencies
+source venv/bin/activate  # On Windows: venv\\Scripts\\activate
 pip install -r requirements.txt
-
-# 4. Set up environment variables
-#    - Create a .env file and add your DATABASE_URL (same as the backend).
-
-# 5. Run the FastAPI server
 uvicorn main:app --reload
+```
 
-Your ML service will now be running, typically on http://localhost:8000.
-
-3. Frontend Setup (The Face)
-
-The React application provides the user interface for all portals.
-
-code
-Bash
-download
-content_copy
-expand_less
-IGNORE_WHEN_COPYING_START
-IGNORE_WHEN_COPYING_END
-# 1. Navigate to the frontend directory
+### 5. Start Frontend Layer
+```bash
 cd frontend
-
-# 2. Install dependencies
 npm install
-
-# 3. Verify environment variables
-#    - The .env file should contain REACT_APP_BACKEND_URL=http://localhost:3001
-#    - This tells the frontend to talk to your local Node.js backend.
-
-# 4. Run the development server
-npm start```
-Your browser will automatically open to `http://localhost:3000`.
-
-### 4. Database Setup (The Memory)
-
-Your backend requires a PostgreSQL database.
-1.  Create a project on [Supabase](https://supabase.com/).
-2.  In the **SQL Editor**, run the complete schema script provided in `db.txt` to create all necessary tables, functions, and indexes.
-3.  Run the provided "demo data" SQL script to populate your database with users and activity for a rich demo experience.
-4.  Copy your database **Connection Pooler URI** into the `DATABASE_URL` variable in your backend's `.env` file.
+npm start
+```
+Browser will launch at `http://localhost:3000`.
 
 ---
 
-## 🛠️ Tech Stack
+## 🔐 Environment Variables Summary
 
--   **Backend:** Node.js, Express.js
--   **Frontend:** React, Tailwind CSS, ShadCN/UI Components
--   **Database:** PostgreSQL (managed by Supabase)
--   **AI / ML:** Python, FastAPI, Google Gemini, Sentence-Transformers
--   **Real-time Communication:** Meta's WhatsApp API
-
----
-
-##  Demo Credentials
-
-You can use the following credentials to explore the different portals:
-
-| Role    | Phone Number      | Password        |
-|---------|-------------------|-----------------|
-| **Admin** | `+918000000000`   | `admin123`      |
-| **Donor** | `+919876543210`   | `mumbai o+`     |
-| **Patient** | `+911234567890` | `delhi a+`      |
-
-*(Note: Donor and Patient passwords are their `city` and `blood_group` in lowercase, separated by a space.)*
+| Variable | Location | Purpose |
+|----------|----------|----------|
+| `PORT` | Backend | The port the Node server listers on |
+| `DATABASE_URL` | Backend / ML | Postgres connection string for full DB queries |
+| `GEMINI_API_KEY` | Backend | Authentication for parsing text using Google Flash |
+| `ML_SERVICE_URL` | Backend | Pointer to the Python API instance |
+| `WHATSAPP_TOKEN` | Backend | Bearer token for outbound Meta SMS functions |
+| `WHATSAPP_APP_SECRET` | Backend | Used to cryptographically secure the incoming Meta Webhook body |
+| `JWT_SECRET` | Backend | String used for generating portal authentication tokens |
+| `REACT_APP_BACKEND_URL` | Frontend | (If explicitly defined) targets local API `http://localhost:3001` |
