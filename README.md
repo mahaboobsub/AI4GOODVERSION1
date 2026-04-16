@@ -161,6 +161,161 @@ The backend avoids standard HTML/Template engines (like EJS/Pug) because it is f
 
 ---
 
+## 🖥️ UI Layouts Overview
+
+The platform offers multiple tailored interfaces designed for different user roles (Admin, Donor, Patient), all wrapped within a responsive, modern React application.
+
+**1. Landing Page (`/`)**
+- A public-facing pitch page outlining the mission of BloodBridge AI.
+- Features dynamic public statistics (e.g., lives saved, active bridges) fetched statically or incrementally.
+- Navigation points guiding users to register via WhatsApp or login to the portals.
+
+**2. Authentication/Login (`/login`)**
+- A unified entry point for all roles.
+- Accepts phone numbers and passwords.
+- On successful authentication, the backend issues a JWT, and the frontend dynamically routes the user to their respective dashboard (`/admin`, `/donor`, or `/patient`) based on their stored `user_type`.
+
+**3. Admin Portal (`/admin`)**
+- **Dashboard Hub:** Visual metrics regarding total bridged patients, overall system health, and blood group distributions.
+- **Emergency Management:** View real-time emergency blood requests and manually `close` or `escalate` them.
+- **Patient & Bridge Management:** List of Thalassemia patients. Admins can manually click "Create Bridge" to execute the PL/pgSQL matching functions from the frontend UI.
+- **Inbox:** A view of unresolved intents where Gemini couldn't fully fulfill a user's WhatsApp query or categorized it as requiring human intervention. Admins can "resolve" these.
+
+**4. Donor Portal (`/donor`)**
+- **Gamification Profile:** Displays the donor's `gamification_points`, `streak_count`, badges, and past donations.
+- **Availability Toggle:** A core UI element allowing the donor to pause alerts (snooze/DND) if they are traveling or temporarily ineligible.
+- **Current Bridge Status:** Shows if the donor is actively allocated to a patient rotation sequence.
+
+**5. Patient Portal (`/patient`)**
+- A tracking interface giving patients peace of mind.
+- Shows their personal assigned "Blood Bridge", the rotation sequence, and historical transfusion dates.
+
+---
+
+## 🔌 API Flows: Frontend to Backend
+
+The frontend communicates with the Node.js Express backend using standard REST APIs with JWT Bearer authentication. 
+
+### Public Routes
+- `POST /api/admin/login`: Authenticates phone/password credentials and issues a JWT along with user role info.
+- `GET /api/public/stats`: Fetches non-sensitive aggregate system data for the landing page.
+
+### Admin Routes (Protected: Admin Role)
+- `GET /api/admin/stats`: Retrieves high-level dashboard metrics.
+- `GET /api/admin/stats/blood-groups`: Aggregates the availability of donors partitioned by blood groups.
+- `GET /api/admin/patients`: List of registered patients needing bridges.
+- `GET /api/admin/emergencies`: Polls or retrieves unfulfilled blood requests.
+- `GET /api/admin/leaderboard`: Ranks top donors by gamification points.
+- `GET /api/admin/inbox`: Fetches unresolved manual intervention messages.
+- `POST /api/admin/patients/:patientId/create-bridge`: Triggers the complex database function to hunt and assemble an optimal group of donors into a bridge for a specific patient.
+- `POST /api/admin/emergencies/:requestId/close`: Resolves a fulfilled emergency request.
+- `POST /api/admin/emergencies/:requestId/escalate`: Triggers fallback protocols for failing emergency requests.
+- `GET /api/admin/bridges/:bridgeId/members`: Lists specific donors sitting within a rotational bridge.
+- `DELETE /api/admin/bridges/members/:memberId`: Evicts a donor from a continuous rotation (e.g., if they opted out).
+
+### Donor Routes (Protected: Donor Role)
+- `GET /api/donor/dashboard`: Serves personalized gamification stats, donation history, and badge accomplishments.
+- `PUT /api/donor/availability`: Updates the `availability_status` or `snooze_until` fields for that specific donor.
+
+### Patient Routes (Protected: Patient Role)
+- `GET /api/patient/dashboard`: Retrieves the patient's individual treatment timeline, next expected transfusion, and their assigned Bridge metadata.
+
+### ML Service Routes (Internal Backend to Python API)
+- `POST /predict`: Sends donor parameters (snoozes, historical response times) to receive a reliability score index.
+- `POST /rag/query`: Sends user WhatsApp FAQs string to the Sentence-Transformers pipeline, fetching contextual matches from `knowledge_base` vectors.
+
+---
+
+## 🗄️ In-Depth Database Schema (Supabase PostgreSQL)
+
+The system revolves around heavily interconnected nodes guaranteeing precise routing of medical requirements.
+
+1. **`users` (Donors & Admins)**
+   - Core fields: `phone` (Unique), `name`, `blood_group`, `city`, `user_type` (donor, patient, admin).
+   - Engagement fields: `availability_status` (available, unavailable, on_hold), `dnd_status`, `snooze_until`.
+   - Gamification & ML: `gamification_points`, `streak_count`, `last_ml_score` (calculated heavily via Python service caching).
+
+2. **`patients`**
+   - Details: `condition`, `status` (pending_opt_in, active, bridged), `last_transfusion_date`, `frequency_in_days` (driving the node-cron scheduler).
+
+3. **`blood_bridges` & `bridge_members`**
+   - `blood_bridges`: Links a `patient_id` to a unique rotational group. Tracks `rotation_position` so the system knows whose turn it is next month.
+   - `bridge_members`: Resolves the M:N relationship mapping `donor_id` to `bridge_id`. Maintains the exact sequence (`position`) the donor holds in the rotation queue.
+
+4. **`emergency_requests`**
+   - Active needs pinging the system outside regular cycles, holding `units_needed`, `hospital_name`, `latitude`/`longitude`, and an expiring `short_code` for WhatsApp confirmations.
+
+5. **`donor_responses`**
+   - Audit trail mapping a `donor_id` matching an `emergency_request`. Handles short-lived `otp` validation directly inside the database table preventing race-conditions.
+
+6. **`knowledge_base` (pgvector)**
+   - A minimalist semantic table holding `content` and `embedding` (`JSONB` parsed into PgVector) ensuring rapid vector distance calculations for inbound natural language questions.
+
+7. **PL/pgSQL Functions**
+   - `find_donors_for_bridge`: A critical procedure that filters donors entirely on DB-level constraints (ignoring DND, matching cities, sorting by `last_ml_score`) guaranteeing instant allocation with minimal node memory footprints.
+
+---
+
+## 🧐 Deep-Dive Technical FAQs
+
+**Q: How does the system prevent WhatsApp race conditions when multiple donors accept the same emergency?**
+**A:** The database acts as the strict source of truth. When a broadcast is sent, multiple users might reply "YES". The system leverages the `donor_responses` table with unique constraints. The first response executing an update validates the remaining required units and commits the transaction. If the transaction spots `units_needed = 0`, subsequent accepts are gracefully rejected by the Node API and a "Thank you, but the requirement is met" message is queued to the Meta API.
+
+**Q: Why separate the ML microservice in Python instead of using TensorFlow.js within Node?**
+**A:** While TensorFlow.js exists, Python offers vastly superior tooling (`scikit-learn`, `Sentence-Transformers`, DataFrame operations), specifically for NLP and predictive heuristics frameworks. Isolating it guarantees that heavy tensor matrix multiplication blocks don't hog the primary Node.js event-loop, which must stay lightning fast to respond to thousands of concurrent asynchronous WhatsApp incoming webhook payloads seamlessly.
+
+**Q: In the database schema, why track `last_ml_score` instead of calculating it live per bridge request?**
+**A:** Calculating predictive scoring requires aggregating a donor's historical response times, skip rates, and demographic models. Computing this on-the-fly for millions of users during an emergency is inefficient. We use a batch-processing cron-job during off-peak hours that pushes calculated scores to the `last_ml_score` column. The `find_donors_for_bridge` stored procedure then just performs a basic `ORDER BY last_ml_score DESC` integer sort, achieving near zero latency matching.
+
+**Q: How does the system securely handle automated chron tasks without relying on external triggers like AWS EventBridge?**
+**A:** The Node API initializes `node-cron` listeners on server start (`EngagementService`). It pulls `patients` where `last_transfusion_date + frequency_in_days` nears today. To prevent a crashed server from losing schedules, or multiple server instances sending dupes, the DB uses a pessimistic locking model `SELECT ... FOR UPDATE` when grabbing due patients, processing the WhatsApp Queue, and immediately updating `last_transfusion_date` to complete the cycle.
+
+**Q: Why bypass an ORM and use raw PL/pgSQL for donor routing?**
+**A:** Using an ORM (like Prisma/Sequelize) requires pulling all potential donors into Node.js memory just to filter them by constraints and ML scores. Wrapping this into a native PL/pgSQL function (`find_donors_for_bridge`) restricts data movement. Node.js sends the parameters, and PostgreSQL does all the heavy memory filtering internally, spitting back only the exact 5 UUIDs required—drastically cutting network IO overheads.
+
+**Q: How does the AI (Gemini 2.0 Flash) handle unpredictable or ambiguous typos in WhatsApp messages?**
+**A:** Instead of rigid regex, we pass the raw user text string to Gemini alongside a STRICT system prompt defining expected JSON schemas (`zod`/Type constraints). If a user types "I nd blud in delih a pos", Gemini acts as an autonomous NLP router. It infers "Delhi" as the city, "A+" as the blood group, and "blood_request" as the intent, returning a sanitized JSON object our backend easily parses. If the confidence is too low, Gemini reverts with an `"intent": "unknown"`, dropping the payload safely into the Admin's `inbox_messages` table for manual review.
+
+---
+
+## 📞 The WhatsApp Integration Engine
+
+**How it works structurally:**
+The entire end-user experience (for Donors and Patients) runs without requiring app downloads. The system relies natively on the **Meta WhatsApp Cloud API**.
+1. **Webhook Listener:** The Node.js server maintains a single `POST /webhook` endpoint that continuously listens for incoming SMS payloads from Meta.
+2. **Crypto-Validation:** Meta secures this by signing the body with a `SHA256 HMAC`. The Node.js middleware intercepts the raw binary buffer of the request, validates the crypto-hash computationally against the `WHATSAPP_APP_SECRET`, and then parses the JSON. This categorically rejects malicious forged webhook calls.
+3. **Interactive Payloads:** The backend heavily utilizes WhatsApp "Interactive Messages" (Buttons and List forms). Rather than forcing a donor to type arbitrary "Yes" or "No" responses which are prone to typos, the system pushes tracked, structured button payloads to their phone.
+4. **Session-less Architecture:** REST APIs via Webhooks are entirely stateless. To overcome this, the backend constructs session context from the inbound `phone` number, routing the intent based on whether the number is relationally mapped in the database to a Donor, Patient, Admin, or unregistered user.
+
+---
+
+## 🧠 Core Algorithms Used and Why
+
+**1. Hybrid Constraint & ML Matchmaking Algorithm (Donor Routing)**
+- **Algorithm Type:** Heuristic Filtering + ML Descending Sort Strategy.
+- **Why it's used:** Relying purely on an AI LLM to pick donors is a "black box" risk in critical healthcare. So, we first run a strict **deterministic numerical filter** (e.g., Must be in same City, exact Blood Match, NOT on a snooze period, NOT currently active in another bridge). Once this pool is filtered, we sort them by a pre-calculated **ML Reliability Score Index**.
+- **How it works:** Implemented natively within `dbschme992025` via the `find_donors_for_bridge` PL/pgSQL function. This mathematically returns the top N donors with the highest probability to physically show up, while completely obeying hard medical constraints.
+
+**2. RAG (Retrieval-Augmented Generation) with K-Nearest Neighbors**
+- **Algorithm Type:** Vector Distance calculation (K-Nearest Neighbors approach using Cosine Similarity).
+- **Why it's used:** Keyword matching (e.g., `LIKE '%blood%'`) fails dramatically for conversational FAQs (e.g., searching "Does it hurt?" against "Donation safety"). 
+- **How it works:** When a user asks a medical question on WhatsApp, the Python ML layer uses `Sentence-Transformers` to map the English string into a high-dimensional dense vector. Supabase's `pgvector` extension then rigorously scans all embeddings in the `knowledge_base` table, fetching the geometrically closest text snippet (highest contextual match) and generates a human-readable response.
+
+**3. Autoregressive Intent Extraction (LLM Routing)**
+- **Algorithm Type:** Few-Shot Prompted NLP via Google Gemini 2.0 Flash.
+- **Why it's used:** Real-world SMS chat is notoriously chaotic with typos, Hinglish slang, and mixed contexts. Traditional RegExp completely fails here.
+- **How it works:** The raw text chunk is fed to the Gemini LLM algorithm enforcing a strict **JSON Schema format**. The LLM acts entirely as a robust structural router, extracting Named Entities (NER) like cities and blood groups, avoiding arbitrary logic branches in Node.js.
+
+---
+
+## ✨ Key Platform Features Powered By Algorithms
+
+1. **Continuous "Blood Bridges":** Unlike generic broadcast models that spam the whole city, our rotational algorithm locks a fixed subset of targeted Donors to a specific Patient indefinitely. It automatically iterates a `rotation_position` pointer, so Donor A is called in Month 1, and Donor B in Month 2 seamlessly.
+2. **Predictive Silence (Snoozing):** The algorithm tracks biological 90-day cooldown rules inherently. If you donate, the node-cron automatically injects a `snooze_until` timestamp exactly 90 days out, structurally protecting donors from being pinged when legally ineligible.
+3. **Automated Escalation Protocol:** If an emergency request fails to gather its required `units_needed` using the optimal localized ML Matches within a time window, an automated background service geometrically "escalates" the radius, recursively expanding the algorithm's city/network limits.
+
+---
+
 ## 🚀 Getting Started
 
 To run the complete BloodBridge AI platform locally, you will need to run three separate services: the **Backend (Node.js)**, the **Frontend (React)**, and the **ML Service (Python)**.
